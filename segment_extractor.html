@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shared Segment Extractor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    color: #222;
+    background: #f5f6f8;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.25rem 0; }
+  .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.5; }
+
+  /* Inputs */
+  .input-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  .input-section label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #555;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+  textarea {
+    width: 100%;
+    height: 160px;
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    resize: vertical;
+    background: white;
+  }
+  textarea:focus { outline: 2px solid #4a90d9; border-color: transparent; }
+
+  /* Settings */
+  .settings {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+  .settings label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #555;
+    margin-bottom: 0.3rem;
+  }
+  .settings .setting-help {
+    font-size: 0.72rem;
+    color: #777;
+    margin-top: 0.25rem;
+    font-weight: 400;
+    line-height: 1.3;
+  }
+  .settings input[type="number"] {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+
+  .btn-row { text-align: center; margin-bottom: 1.5rem; }
+  button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 0.65rem 2rem;
+    font-size: 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button:hover { background: #1d4ed8; }
+  .btn-clear {
+    background: #e5e7eb;
+    color: #444;
+    margin-left: 0.75rem;
+  }
+  .btn-clear:hover { background: #d1d5db; }
+
+  /* Results */
+  #results { display: none; }
+  #results.visible { display: block; }
+
+  .summary {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .summary h2 { font-size: 1.1rem; margin: 0 0 0.5rem 0; }
+  .summary .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+  .summary .stat .label {
+    color: #666;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: block;
+  }
+  .summary .stat .value { font-weight: 700; font-size: 1.1rem; }
+
+  /* Info icon + tooltip */
+  .info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    font-style: normal;
+    cursor: help;
+    position: relative;
+    vertical-align: middle;
+    margin-left: 3px;
+    flex-shrink: 0;
+  }
+  .info:hover { background: #94a3b8; }
+  .info .tip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: #f1f5f9;
+    font-size: 12px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    line-height: 1.45;
+    padding: 8px 10px;
+    border-radius: 6px;
+    width: 260px;
+    white-space: normal;
+    z-index: 10;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .info .tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #1e293b;
+  }
+  .info:hover .tip { display: block; }
+
+  /* Ribbon minimap */
+  .minimap {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .minimap h3 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #888;
+    margin: 0 0 0.75rem 0;
+  }
+  .ribbon-row {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .ribbon-label { font-size: 0.8rem; color: #555; font-weight: 600; }
+  .ribbon {
+    position: relative;
+    height: 28px;
+    background: #eef1f4;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .ribbon .seg-block {
+    position: absolute;
+    top: 0; bottom: 0;
+    cursor: pointer;
+    transition: filter 0.15s;
+  }
+  .ribbon .seg-block:hover { filter: brightness(0.85); }
+  .ribbon .seg-block.active { outline: 2px solid #111; outline-offset: -2px; z-index: 2; }
+
+  /* Segment cards */
+  .segments-list { margin-bottom: 1.25rem; }
+  .segment-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    scroll-margin-top: 1rem;
+  }
+  .segment-card.active { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+  .segment-card .seg-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .seg-chip {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+  .seg-title { font-weight: 700; font-size: 1rem; }
+  .seg-meta {
+    font-size: 0.8rem;
+    color: #666;
+    display: flex;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+  }
+  .seg-meta strong { color: #222; }
+  .seg-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .seg-col {
+    border: 1px solid #eee;
+    border-radius: 4px;
+    padding: 0.75rem 0.9rem;
+    line-height: 1.65;
+    font-size: 0.9rem;
+    background: #fafafa;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .seg-col h4 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #888;
+    margin: 0 0 0.4rem 0;
+    font-weight: 600;
+  }
+  .match { background: #c8f0c8; border-radius: 2px; padding: 1px 2px; transition: outline 0.1s, background 0.1s; }
+  .match[data-mid] { cursor: pointer; }
+  .match.highlight { background: #90e090; outline: 2px solid #1a7a1a; }
+  .diff  { background: #fbd4d4; border-radius: 2px; padding: 1px 2px; }
+
+  /* Instance rendering inside a segment card */
+  .instance { padding: 0.5rem 0; border-bottom: 1px dashed #e3e3e3; }
+  .instance:last-child { border-bottom: none; padding-bottom: 0; }
+  .instance:first-child { padding-top: 0; }
+  .inst-header {
+    font-size: 0.72rem;
+    color: #777;
+    margin-bottom: 0.35rem;
+    letter-spacing: 0.02em;
+  }
+  .inst-header strong { color: #333; }
+  .inst-text { line-height: 1.65; }
+
+  .empty-state {
+    text-align: center;
+    color: #888;
+    padding: 2rem;
+    background: white;
+    border: 1px dashed #ccc;
+    border-radius: 6px;
+    font-size: 0.95rem;
+  }
+
+  details.full-view { margin-top: 1.5rem; }
+  details.full-view > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #2563eb;
+    padding: 0.5rem 0;
+  }
+  .full-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 0.75rem;
+  }
+  .full-col {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    line-height: 1.7;
+    font-size: 0.88rem;
+  }
+  .full-col h2 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #888;
+    margin: 0 0 0.75rem 0;
+  }
+  .seg-marker {
+    padding: 2px 3px;
+    border-radius: 3px;
+  }
+
+  .legend {
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .legend span {
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+
+<h1>TV Transcript Shared Segment Extractor</h1>
+<p class="subtitle">
+  Paste two long transcripts (e.g. 30&ndash;60 minute TV shows) and extract the
+  chunks of text that appear in both. The tool identifies matching word runs,
+  chains them together across small transcription-noise gaps, and reports the
+  clean shared segments. It then recursively searches for additional shared
+  segments in the remaining text &mdash; so it can find multiple duplicated
+  chunks even when they appear in different orders across the two transcripts.
+</p>
+
+<div class="input-section">
+  <div>
+    <label for="text1">Transcript 1</label>
+    <textarea id="text1" placeholder="Paste the first full transcript here..."></textarea>
+  </div>
+  <div>
+    <label for="text2">Transcript 2</label>
+    <textarea id="text2" placeholder="Paste the second full transcript here..."></textarea>
+  </div>
+</div>
+
+<div class="settings">
+  <div>
+    <label for="maxGap">Max gap (words)</label>
+    <input type="number" id="maxGap" value="10" min="0" step="1">
+    <div class="setting-help">Merge two matching runs into one segment if the non-matching gap between them is at most this many words (on either side).</div>
+  </div>
+  <div>
+    <label for="minLength">Min segment length (words)</label>
+    <input type="number" id="minLength" value="40" min="1" step="1">
+    <div class="setting-help">Drop merged segments shorter than this (measured as the average of the two sides).</div>
+  </div>
+  <div>
+    <label for="minPurity">Min purity</label>
+    <input type="number" id="minPurity" value="0.6" min="0" max="1" step="0.05">
+    <div class="setting-help">Matched words &divide; total segment words. Keeps segments where at least this fraction is a true match.</div>
+  </div>
+</div>
+
+<div class="btn-row">
+  <button onclick="run()">Find Shared Segments</button>
+  <button class="btn-clear" onclick="clearAll()">Clear</button>
+</div>
+
+<div id="results">
+  <div class="summary" id="summary"></div>
+  <div class="minimap" id="minimap"></div>
+  <div class="segments-list" id="segments"></div>
+  <details class="full-view">
+    <summary>Show full transcripts with segments highlighted</summary>
+    <div class="full-columns">
+      <div class="full-col"><h2>Transcript 1</h2><div id="fullCol1"></div></div>
+      <div class="full-col"><h2>Transcript 2</h2><div id="fullCol2"></div></div>
+    </div>
+  </details>
+</div>
+
+<script>
+// ── Word-level SequenceMatcher (port of Python's difflib) ───────────────
+function sequenceMatcherGetBlocks(a, b) {
+  const b2j = new Map();
+  for (let j = 0; j < b.length; j++) {
+    const w = b[j];
+    if (!b2j.has(w)) b2j.set(w, []);
+    b2j.get(w).push(j);
+  }
+  const blocks = [];
+  function findLongestMatch(alo, ahi, blo, bhi) {
+    let bestI = alo, bestJ = blo, bestSize = 0;
+    let j2len = new Map();
+    for (let i = alo; i < ahi; i++) {
+      const newJ2len = new Map();
+      const indices = b2j.get(a[i]);
+      if (indices) {
+        for (const j of indices) {
+          if (j < blo || j >= bhi) continue;
+          const k = (j2len.get(j - 1) || 0) + 1;
+          newJ2len.set(j, k);
+          if (k > bestSize) { bestI = i - k + 1; bestJ = j - k + 1; bestSize = k; }
+        }
+      }
+      j2len = newJ2len;
+    }
+    return [bestI, bestJ, bestSize];
+  }
+  function helper(alo, ahi, blo, bhi) {
+    const [i, j, k] = findLongestMatch(alo, ahi, blo, bhi);
+    if (k > 0) {
+      if (alo < i && blo < j) helper(alo, i, blo, j);
+      blocks.push([i, j, k]);
+      if (i + k < ahi && j + k < bhi) helper(i + k, ahi, j + k, bhi);
+    }
+  }
+  helper(0, a.length, 0, b.length);
+  const collapsed = [];
+  for (const [i, j, k] of blocks) {
+    if (collapsed.length) {
+      const last = collapsed[collapsed.length - 1];
+      if (last[0] + last[2] === i && last[1] + last[2] === j) { last[2] += k; continue; }
+    }
+    collapsed.push([i, j, k]);
+  }
+  return collapsed;
+}
+
+// ── Segment extraction ─────────────────────────────────────────────────
+function extractSharedSegments(words1, words2, { maxGap, minLength, minPurity }) {
+  const rawBlocks = sequenceMatcherGetBlocks(words1, words2);
+  const matches = rawBlocks.filter(([, , k]) => k > 0);
+  if (matches.length === 0) return [];
+
+  // Chain matches whose gap (on either side) is <= maxGap.
+  // Each chained segment tracks the list of constituent matches so we can
+  // compute purity and render intra-segment matches/diffs later.
+  const chained = [];
+  let current = {
+    s1: matches[0][0],
+    e1: matches[0][0] + matches[0][2],
+    s2: matches[0][1],
+    e2: matches[0][1] + matches[0][2],
+    members: [matches[0]],
+  };
+  for (let i = 1; i < matches.length; i++) {
+    const [s1, s2, k] = matches[i];
+    const e1 = s1 + k, e2 = s2 + k;
+    const gap1 = s1 - current.e1;
+    const gap2 = s2 - current.e2;
+    if (Math.max(gap1, gap2) <= maxGap) {
+      current.e1 = e1; current.e2 = e2;
+      current.members.push(matches[i]);
+    } else {
+      chained.push(current);
+      current = { s1, e1, s2, e2, members: [matches[i]] };
+    }
+  }
+  chained.push(current);
+
+  // Score and filter
+  return chained.map(seg => {
+    const matchedWords = seg.members.reduce((sum, [, , k]) => sum + k, 0);
+    const len1 = seg.e1 - seg.s1;
+    const len2 = seg.e2 - seg.s2;
+    const avgLen = (len1 + len2) / 2;
+    const purity = avgLen > 0 ? matchedWords / avgLen : 0;
+    return { ...seg, matchedWords, len1, len2, avgLen, purity };
+  }).filter(seg => seg.avgLen >= minLength && seg.purity >= minPurity);
+}
+
+// Recursively find all shared segments. Each "canonical" segment may have
+// multiple instances in each transcript (e.g. a promo that aired twice in
+// one show but once in another). After each canonical is identified, we
+// also search the remaining (masked) words for additional instances of
+// that segment on each side. Then we mask all found positions and repeat
+// to find the next canonical segment. Matched indices always refer to
+// positions in the ORIGINAL word arrays.
+function extractAllSharedSegments(words1, words2, params) {
+  const MAX_CANONICALS = 50;      // safety bound on distinct segments
+  const MAX_INSTANCES_PER_SIDE = 20;
+
+  const current1 = words1.slice();
+  const current2 = words2.slice();
+
+  function mask(arr, ranges, tag) {
+    for (const [s, e] of ranges) {
+      for (let i = s; i < e; i++) arr[i] = `\u0000${tag}_${i}`;
+    }
+  }
+
+  // Find additional instances of `queryWords` inside `targetWords` (masked
+  // in place). Returns a list of instances in target-array coordinate
+  // space. Each instance carries its sub-match info in query-space so the
+  // caller can map runs back to canonical-member IDs for hover linking.
+  function findMoreInstances(queryWords, targetWords, tag) {
+    const instances = [];
+    for (let i = 0; i < MAX_INSTANCES_PER_SIDE; i++) {
+      const segs = extractSharedSegments(queryWords, targetWords, params);
+      if (segs.length === 0) break;
+      const best = segs.reduce((a, b) => (a.avgLen >= b.avgLen ? a : b));
+      // Each sub-match member: [queryStart, targetStart, size]
+      const subMembers = best.members.map(([q, t, k]) => ({ q, t, k }));
+      const matchRanges = subMembers.map(m => [m.t, m.t + m.k]);
+      instances.push({
+        start: best.s2,
+        end: best.e2,
+        subMembers,           // in (query, target) coord space
+        matchRanges,          // convenience: target-side ranges only
+        matchedWords: best.matchedWords,
+        len: best.len2,
+        purity: best.purity,
+      });
+      mask(targetWords, matchRanges, `${tag}_${i}`);
+    }
+    return instances;
+  }
+
+  // For a sub-match whose query range is [qStart, qEnd] in a canonical
+  // coordinate space, return the canonical-member index it overlaps most.
+  // canonMemberRanges is [{start, end}, ...] in that same coord space.
+  function bestMemberForRange(canonMemberRanges, qStart, qEnd) {
+    let bestIdx = -1, bestOv = 0;
+    for (let i = 0; i < canonMemberRanges.length; i++) {
+      const { start, end } = canonMemberRanges[i];
+      const ov = Math.max(0, Math.min(end, qEnd) - Math.max(start, qStart));
+      if (ov > bestOv) { bestOv = ov; bestIdx = i; }
+    }
+    return bestIdx;
+  }
+
+  const allSegments = [];
+
+  for (let round = 0; round < MAX_CANONICALS; round++) {
+    const segs = extractSharedSegments(current1, current2, params);
+    if (segs.length === 0) break;
+
+    // Process the largest remaining shared chunk as a new canonical segment.
+    const seg = segs.reduce((a, b) => (a.avgLen >= b.avgLen ? a : b));
+
+    // Each canonical member has a unique mid (0..N-1). All instances will
+    // reference these mids via their own sub-matches, giving us a shared
+    // hover key across every instance of the segment.
+    const canonMembersT1 = seg.members.map(([a, , k], mid) => ({ start: a - seg.s1, end: a - seg.s1 + k, mid }));
+    const canonMembersT2 = seg.members.map(([, b, k], mid) => ({ start: b - seg.s2, end: b - seg.s2 + k, mid }));
+
+    const canonRanges1 = seg.members.map(([a, , k]) => [a, a + k]);
+    const canonRanges2 = seg.members.map(([, b, k]) => [b, b + k]);
+
+    // Canonical instances: each member directly maps to a mid by index.
+    const t1Instances = [{
+      start: seg.s1, end: seg.e1,
+      matchRuns: seg.members.map(([a, , k], mid) => ({ start: a, end: a + k, mid })),
+      matchRanges: canonRanges1,
+      matchedWords: seg.matchedWords, len: seg.len1, purity: seg.purity,
+    }];
+    const t2Instances = [{
+      start: seg.s2, end: seg.e2,
+      matchRuns: seg.members.map(([, b, k], mid) => ({ start: b, end: b + k, mid })),
+      matchRanges: canonRanges2,
+      matchedWords: seg.matchedWords, len: seg.len2, purity: seg.purity,
+    }];
+
+    // Grab canonical text slices from the ORIGINAL (un-masked) words,
+    // so their quality as search queries isn't degraded by earlier masking.
+    const canonText1 = words1.slice(seg.s1, seg.e1);
+    const canonText2 = words2.slice(seg.s2, seg.e2);
+
+    // Mask the canonical matched positions so they aren't rediscovered.
+    mask(current1, canonRanges1, `M1R${round}`);
+    mask(current2, canonRanges2, `M2R${round}`);
+
+    // Look for this segment's text appearing more than once in each
+    // transcript (using each side's own version as the query).
+    const extraT2 = findMoreInstances(canonText1, current2, `Q2R${round}`);
+    const extraT1 = findMoreInstances(canonText2, current1, `Q1R${round}`);
+
+    // Map each extra-instance sub-match to a canonical member mid, based
+    // on overlap of the query range with canonical member ranges in the
+    // appropriate coordinate space.
+    for (const inst of extraT2) {
+      inst.matchRuns = inst.subMembers.map(m => ({
+        start: m.t, end: m.t + m.k,
+        mid: bestMemberForRange(canonMembersT1, m.q, m.q + m.k),
+      }));
+    }
+    for (const inst of extraT1) {
+      inst.matchRuns = inst.subMembers.map(m => ({
+        start: m.t, end: m.t + m.k,
+        mid: bestMemberForRange(canonMembersT2, m.q, m.q + m.k),
+      }));
+    }
+    t2Instances.push(...extraT2);
+    t1Instances.push(...extraT1);
+
+    allSegments.push({
+      id: round,
+      canonicalText: canonText1,
+      canonicalLen: canonText1.length,
+      t1Instances,
+      t2Instances,
+    });
+  }
+
+  // Sort canonical segments by their earliest T1 position for natural reading.
+  allSegments.sort((a, b) => {
+    const ap = Math.min(...a.t1Instances.map(i => i.start));
+    const bp = Math.min(...b.t1Instances.map(i => i.start));
+    return ap - bp;
+  });
+  return allSegments;
+}
+
+// ── Rendering helpers ──────────────────────────────────────────────────
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// Generate a distinct color per segment (up to ~12 distinct, then cycles)
+function segColor(i) {
+  const hues = [205, 30, 140, 280, 0, 55, 170, 320, 100, 245, 15, 190];
+  return `hsl(${hues[i % hues.length]}, 65%, 60%)`;
+}
+function segColorSoft(i) {
+  const hues = [205, 30, 140, 280, 0, 55, 170, 320, 100, 245, 15, 190];
+  return `hsl(${hues[i % hues.length]}, 70%, 86%)`;
+}
+
+// Render a slice of words with intra-segment match/diff highlighting.
+// matchRuns: list of { start, end, mid } in absolute word indices of this
+// side. Words in [rangeStart, rangeEnd) not covered are rendered as diffs.
+// `mid` is a canonical member ID used to link hover highlighting across
+// instances of the same segment.
+function renderSegmentSlice(words, rangeStart, rangeEnd, matchRuns) {
+  const mids = new Array(rangeEnd - rangeStart).fill(null);
+  for (const run of matchRuns) {
+    const lo = Math.max(run.start, rangeStart) - rangeStart;
+    const hi = Math.min(run.end, rangeEnd) - rangeStart;
+    for (let i = lo; i < hi; i++) mids[i] = run.mid;
+  }
+  const parts = [];
+  let i = 0;
+  while (i < mids.length) {
+    const mid = mids[i];
+    let j = i;
+    while (j < mids.length && mids[j] === mid) j++;
+    const chunk = escapeHtml(words.slice(rangeStart + i, rangeStart + j).join(' '));
+    if (mid === null) {
+      parts.push(`<span class="diff">${chunk}</span>`);
+    } else {
+      parts.push(`<span class="match" data-mid="${mid}">${chunk}</span>`);
+    }
+    i = j;
+  }
+  return parts.join(' ');
+}
+
+function fmtPct(v) { return (v * 100).toFixed(1) + '%'; }
+
+// ── Main ───────────────────────────────────────────────────────────────
+function run() {
+  const text1 = document.getElementById('text1').value;
+  const text2 = document.getElementById('text2').value;
+  if (!text1.trim() || !text2.trim()) {
+    alert('Please paste text into both fields.');
+    return;
+  }
+  const maxGap = Math.max(0, parseInt(document.getElementById('maxGap').value, 10) || 0);
+  const minLength = Math.max(1, parseInt(document.getElementById('minLength').value, 10) || 1);
+  const minPurity = Math.max(0, Math.min(1, parseFloat(document.getElementById('minPurity').value) || 0));
+
+  const words1 = text1.trim().split(/\s+/).filter(Boolean);
+  const words2 = text2.trim().split(/\s+/).filter(Boolean);
+  const n1 = words1.length, n2 = words2.length;
+
+  const segments = extractAllSharedSegments(words1, words2, { maxGap, minLength, minPurity });
+
+  // ── Summary ──
+  const totalMatched1 = segments.reduce((s, x) => s + x.t1Instances.reduce((ss, i) => ss + i.len, 0), 0);
+  const totalMatched2 = segments.reduce((s, x) => s + x.t2Instances.reduce((ss, i) => ss + i.len, 0), 0);
+  const totalInstances1 = segments.reduce((s, x) => s + x.t1Instances.length, 0);
+  const totalInstances2 = segments.reduce((s, x) => s + x.t2Instances.length, 0);
+  const withRepeats = segments.filter(s => s.t1Instances.length > 1 || s.t2Instances.length > 1).length;
+  // Overall Jaccard similarity: total exactly-matching block length (summed
+  // from the canonical pairing of each segment, so shared content is counted
+  // once even if it repeats on one side) divided by (|T1| + |T2| - matched).
+  const commonLength = segments.reduce((s, seg) => s + (seg.t1Instances[0] ? seg.t1Instances[0].matchedWords : 0), 0);
+  const avgSegLen = segments.length > 0
+    ? segments.reduce((s, seg) => s + seg.canonicalLen, 0) / segments.length : 0;
+  const avgPurity = segments.length > 0
+    ? segments.reduce((s, seg) => s + (seg.t1Instances[0] ? seg.t1Instances[0].purity : 0), 0) / segments.length : 0;
+  // Average size of individual inter-run gaps (each gap is ≤ maxGap).
+  const _allGaps = [];
+  for (const seg of segments) {
+    const inst = seg.t1Instances[0];
+    if (!inst || !inst.matchRuns || inst.matchRuns.length < 2) continue;
+    const runs = inst.matchRuns.slice().sort((a, b) => a.start - b.start);
+    for (let i = 1; i < runs.length; i++) _allGaps.push(runs[i].start - runs[i - 1].end);
+  }
+  const avgGap = _allGaps.length > 0 ? _allGaps.reduce((s, g) => s + g, 0) / _allGaps.length : 0;
+  document.getElementById('summary').innerHTML = `
+    <h2>${segments.length} shared segment${segments.length === 1 ? '' : 's'} found${withRepeats > 0 ? ` (${withRepeats} with repeated instances)` : ''}</h2>
+    <div class="stats">
+      <div class="stat">
+        <span class="label">Transcript 1 length <span class="info">i<span class="tip">Total number of whitespace-separated words in transcript 1.</span></span></span>
+        <span class="value">${n1.toLocaleString()} words</span>
+      </div>
+      <div class="stat">
+        <span class="label">Transcript 2 length <span class="info">i<span class="tip">Total number of whitespace-separated words in transcript 2.</span></span></span>
+        <span class="value">${n2.toLocaleString()} words</span>
+      </div>
+      <div class="stat">
+        <span class="label">Shared in T1 <span class="info">i<span class="tip">Total word count in transcript 1 that falls inside an extracted shared segment (summed across all instances, including repeats). Percentage is relative to transcript 1's length.</span></span></span>
+        <span class="value">${totalMatched1.toLocaleString()} (${n1 ? fmtPct(totalMatched1 / n1) : '0%'})</span>
+      </div>
+      <div class="stat">
+        <span class="label">Shared in T2 <span class="info">i<span class="tip">Total word count in transcript 2 that falls inside an extracted shared segment (summed across all instances, including repeats). Percentage is relative to transcript 2's length.</span></span></span>
+        <span class="value">${totalMatched2.toLocaleString()} (${n2 ? fmtPct(totalMatched2 / n2) : '0%'})</span>
+      </div>
+      <div class="stat">
+        <span class="label">Exact matching words <span class="info">i<span class="tip">Total number of words in exactly matching blocks between the two transcripts. Matching blocks are counted once per unique shared segment (not multiplied by repeat count).</span></span></span>
+        <span class="value">${commonLength.toLocaleString()}</span>
+      </div>
+      <div class="stat">
+        <span class="label">Instances in T1 <span class="info">i<span class="tip">Total number of places in transcript 1 where an extracted shared segment appears, summed across all segments. Larger than the segment count when some segment repeats within transcript 1.</span></span></span>
+        <span class="value">${totalInstances1}</span>
+      </div>
+      <div class="stat">
+        <span class="label">Instances in T2 <span class="info">i<span class="tip">Total number of places in transcript 2 where an extracted shared segment appears, summed across all segments. Larger than the segment count when some segment repeats within transcript 2.</span></span></span>
+        <span class="value">${totalInstances2}</span>
+      </div>
+      <div class="stat">
+        <span class="label">Avg segment length <span class="info">i<span class="tip">Average canonical length (in words) across all extracted shared segments.</span></span></span>
+        <span class="value">${avgSegLen.toFixed(0)} words</span>
+      </div>
+      <div class="stat">
+        <span class="label">Avg word gap <span class="info">i<span class="tip">Average number of non-matching (gap) words per segment. These are words inside a segment's span that sit between matching runs and were bridged by the max-gap chaining step.</span></span></span>
+        <span class="value">${avgGap.toFixed(1)} words</span>
+      </div>
+      <div class="stat">
+        <span class="label">Avg purity <span class="info">i<span class="tip">Average purity across all segments. Purity = matched words &divide; average segment length (across both sides). A purity of 1.0 means every word in the segment is an exact match; lower values indicate more gap words were bridged.</span></span></span>
+        <span class="value">${fmtPct(avgPurity)}</span>
+      </div>
+    </div>
+  `;
+
+  // ── Minimap ribbon (all instances of a segment share its color) ──
+  const minimapEl = document.getElementById('minimap');
+  if (segments.length === 0) {
+    minimapEl.innerHTML = '';
+  } else {
+    const ribbon1 = segments.map((seg, i) =>
+      seg.t1Instances.map(inst => {
+        const left = (inst.start / n1) * 100;
+        const width = ((inst.end - inst.start) / n1) * 100;
+        return `<div class="seg-block" data-seg="${i}" style="left:${left}%;width:${width}%;background:${segColor(i)};" title="Segment ${i + 1}"></div>`;
+      }).join('')
+    ).join('');
+    const ribbon2 = segments.map((seg, i) =>
+      seg.t2Instances.map(inst => {
+        const left = (inst.start / n2) * 100;
+        const width = ((inst.end - inst.start) / n2) * 100;
+        return `<div class="seg-block" data-seg="${i}" style="left:${left}%;width:${width}%;background:${segColor(i)};" title="Segment ${i + 1}"></div>`;
+      }).join('')
+    ).join('');
+    minimapEl.innerHTML = `
+      <h3>Where each shared segment sits in each transcript</h3>
+      <div class="ribbon-row">
+        <div class="ribbon-label">Transcript 1</div>
+        <div class="ribbon">${ribbon1}</div>
+      </div>
+      <div class="ribbon-row">
+        <div class="ribbon-label">Transcript 2</div>
+        <div class="ribbon">${ribbon2}</div>
+      </div>
+      <div class="legend">Click a block to jump to that segment. Blocks with the same color are instances of the same segment.</div>
+    `;
+  }
+
+  // ── Segment cards ──
+  const segmentsEl = document.getElementById('segments');
+  if (segments.length === 0) {
+    segmentsEl.innerHTML = `<div class="empty-state">No shared segments found with the current settings. Try lowering <strong>Min segment length</strong> or <strong>Min purity</strong>, or increasing <strong>Max gap</strong>.</div>`;
+  } else {
+    function renderInstanceList(instances, words, n, transcriptLabel) {
+      const multi = instances.length > 1;
+      return instances.map((inst, k) => {
+        const posPct = `${fmtPct(inst.start / n)}&ndash;${fmtPct(inst.end / n)}`;
+        const header = multi
+          ? `<div class="inst-header"><strong>Instance ${k + 1}</strong> &middot; words ${inst.start}&ndash;${inst.end} &middot; ${posPct} &middot; ${inst.len}w &middot; ${fmtPct(inst.purity)} purity</div>`
+          : `<div class="inst-header">Words ${inst.start}&ndash;${inst.end} &middot; position ${posPct} &middot; ${fmtPct(inst.purity)} purity</div>`;
+        const html = renderSegmentSlice(words, inst.start, inst.end, inst.matchRuns || []);
+        return `<div class="instance">${header}<div class="inst-text">${html}</div></div>`;
+      }).join('');
+    }
+
+    segmentsEl.innerHTML = segments.map((seg, i) => {
+      const canonLen = seg.canonicalLen;
+      const t1Count = seg.t1Instances.length;
+      const t2Count = seg.t2Instances.length;
+      const instancesNote = (t1Count > 1 || t2Count > 1)
+        ? `<span>appears <strong>${t1Count}&times;</strong> in T1, <strong>${t2Count}&times;</strong> in T2</span>`
+        : '';
+      return `
+        <div class="segment-card" id="seg-${i}">
+          <div class="seg-header">
+            <span class="seg-chip" style="background:${segColor(i)};"></span>
+            <span class="seg-title">Segment ${i + 1}</span>
+            <span class="seg-meta">
+              <span>canonical length <strong>~${canonLen}</strong> words</span>
+              ${instancesNote}
+            </span>
+          </div>
+          <div class="seg-columns">
+            <div class="seg-col">
+              <h4>In Transcript 1${t1Count > 1 ? ` (${t1Count} instances)` : ''}</h4>
+              ${renderInstanceList(seg.t1Instances, words1, n1, 'T1')}
+            </div>
+            <div class="seg-col">
+              <h4>In Transcript 2${t2Count > 1 ? ` (${t2Count} instances)` : ''}</h4>
+              ${renderInstanceList(seg.t2Instances, words2, n2, 'T2')}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Wire up minimap clicks → scroll to card
+    minimapEl.querySelectorAll('.seg-block').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = el.dataset.seg;
+        document.querySelectorAll('.segment-card.active').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.ribbon .seg-block.active').forEach(c => c.classList.remove('active'));
+        const card = document.getElementById('seg-' + idx);
+        card.classList.add('active');
+        minimapEl.querySelectorAll(`.seg-block[data-seg="${idx}"]`).forEach(b => b.classList.add('active'));
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Hover linking: matching runs with the same data-mid within the same
+    // segment card all light up together. Works across every instance of
+    // the segment (canonical + repeats on either side).
+    segmentsEl.querySelectorAll('.segment-card').forEach(card => {
+      card.querySelectorAll('.match[data-mid]').forEach(el => {
+        el.addEventListener('mouseenter', () => {
+          const mid = el.dataset.mid;
+          card.querySelectorAll(`.match[data-mid="${mid}"]`).forEach(e => e.classList.add('highlight'));
+        });
+        el.addEventListener('mouseleave', () => {
+          card.querySelectorAll('.match.highlight').forEach(e => e.classList.remove('highlight'));
+        });
+      });
+    });
+  }
+
+  // ── Full transcripts with segment highlighting (all instances included) ──
+  function renderFullSide(words, n, side) {
+    // Annotate each word index with segment index (or null). Iterate all
+    // instances of every segment so repeats are highlighted everywhere.
+    const ann = new Array(words.length).fill(null);
+    segments.forEach((seg, i) => {
+      const instances = side === 1 ? seg.t1Instances : seg.t2Instances;
+      for (const inst of instances) {
+        for (let k = inst.start; k < inst.end; k++) ann[k] = i;
+      }
+    });
+    const parts = [];
+    let i = 0;
+    while (i < words.length) {
+      const a = ann[i];
+      let j = i;
+      while (j < words.length && ann[j] === a) j++;
+      const chunk = escapeHtml(words.slice(i, j).join(' '));
+      if (a === null) {
+        parts.push(chunk);
+      } else {
+        parts.push(`<span class="seg-marker" style="background:${segColorSoft(a)};" title="Segment ${a + 1}">${chunk}</span>`);
+      }
+      i = j;
+    }
+    return parts.join(' ');
+  }
+  document.getElementById('fullCol1').innerHTML = renderFullSide(words1, n1, 1);
+  document.getElementById('fullCol2').innerHTML = renderFullSide(words2, n2, 2);
+
+  document.getElementById('results').classList.add('visible');
+}
+
+function clearAll() {
+  document.getElementById('text1').value = '';
+  document.getElementById('text2').value = '';
+  document.getElementById('results').classList.remove('visible');
+}
+
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run();
+});
+</script>
+</body>
+</html>
