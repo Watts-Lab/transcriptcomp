@@ -717,8 +717,19 @@ function run() {
   // from the canonical pairing of each segment, so shared content is counted
   // once even if it repeats on one side) divided by (|T1| + |T2| - matched).
   const commonLength = segments.reduce((s, seg) => s + (seg.t1Instances[0] ? seg.t1Instances[0].matchedWords : 0), 0);
-  const unionLength = n1 + n2 - commonLength;
-  const jaccard = unionLength > 0 ? commonLength / unionLength : 1;
+  const avgSegLen = segments.length > 0
+    ? segments.reduce((s, seg) => s + seg.canonicalLen, 0) / segments.length : 0;
+  const avgPurity = segments.length > 0
+    ? segments.reduce((s, seg) => s + (seg.t1Instances[0] ? seg.t1Instances[0].purity : 0), 0) / segments.length : 0;
+  // Average size of individual inter-run gaps (each gap is ≤ maxGap).
+  const _allGaps = [];
+  for (const seg of segments) {
+    const inst = seg.t1Instances[0];
+    if (!inst || !inst.matchRuns || inst.matchRuns.length < 2) continue;
+    const runs = inst.matchRuns.slice().sort((a, b) => a.start - b.start);
+    for (let i = 1; i < runs.length; i++) _allGaps.push(runs[i].start - runs[i - 1].end);
+  }
+  const avgGap = _allGaps.length > 0 ? _allGaps.reduce((s, g) => s + g, 0) / _allGaps.length : 0;
   document.getElementById('summary').innerHTML = `
     <h2>${segments.length} shared segment${segments.length === 1 ? '' : 's'} found${withRepeats > 0 ? ` (${withRepeats} with repeated instances)` : ''}</h2>
     <div class="stats">
@@ -739,8 +750,8 @@ function run() {
         <span class="value">${totalMatched2.toLocaleString()} (${n2 ? fmtPct(totalMatched2 / n2) : '0%'})</span>
       </div>
       <div class="stat">
-        <span class="label">Jaccard similarity <span class="info">i<span class="tip">Total length of exactly matching blocks &divide; (length of T1 + length of T2 &minus; matching block length). Matching blocks are counted once per unique shared segment (not multiplied by repeat count). Ranges from 0 (no overlap) to 1 (identical).</span></span></span>
-        <span class="value">${jaccard.toFixed(3)}</span>
+        <span class="label">Exact matching words <span class="info">i<span class="tip">Total number of words in exactly matching blocks between the two transcripts. Matching blocks are counted once per unique shared segment (not multiplied by repeat count).</span></span></span>
+        <span class="value">${commonLength.toLocaleString()}</span>
       </div>
       <div class="stat">
         <span class="label">Instances in T1 <span class="info">i<span class="tip">Total number of places in transcript 1 where an extracted shared segment appears, summed across all segments. Larger than the segment count when some segment repeats within transcript 1.</span></span></span>
@@ -749,6 +760,18 @@ function run() {
       <div class="stat">
         <span class="label">Instances in T2 <span class="info">i<span class="tip">Total number of places in transcript 2 where an extracted shared segment appears, summed across all segments. Larger than the segment count when some segment repeats within transcript 2.</span></span></span>
         <span class="value">${totalInstances2}</span>
+      </div>
+      <div class="stat">
+        <span class="label">Avg segment length <span class="info">i<span class="tip">Average canonical length (in words) across all extracted shared segments.</span></span></span>
+        <span class="value">${avgSegLen.toFixed(0)} words</span>
+      </div>
+      <div class="stat">
+        <span class="label">Avg word gap <span class="info">i<span class="tip">Average number of non-matching (gap) words per segment. These are words inside a segment's span that sit between matching runs and were bridged by the max-gap chaining step.</span></span></span>
+        <span class="value">${avgGap.toFixed(1)} words</span>
+      </div>
+      <div class="stat">
+        <span class="label">Avg purity <span class="info">i<span class="tip">Average purity across all segments. Purity = matched words &divide; average segment length (across both sides). A purity of 1.0 means every word in the segment is an exact match; lower values indicate more gap words were bridged.</span></span></span>
+        <span class="value">${fmtPct(avgPurity)}</span>
       </div>
     </div>
   `;
