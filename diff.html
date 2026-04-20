@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Transcript Duplication Checker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    color: #222;
+    background: #f5f6f8;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.25rem 0; }
+  .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+  /* Input section */
+  .input-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  .input-section label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #555;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+  textarea {
+    width: 100%;
+    height: 180px;
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    resize: vertical;
+    background: white;
+  }
+  textarea:focus { outline: 2px solid #4a90d9; border-color: transparent; }
+
+  .btn-row { text-align: center; margin-bottom: 1.5rem; }
+  button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 0.6rem 2rem;
+    font-size: 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button:hover { background: #1d4ed8; }
+  button:active { background: #1e40af; }
+  .btn-clear {
+    background: #e5e7eb;
+    color: #444;
+    margin-left: 0.75rem;
+  }
+  .btn-clear:hover { background: #d1d5db; }
+
+  /* Results */
+  #results { display: none; }
+  #results.visible { display: block; }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+    background: white;
+    padding: 1rem 1.25rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    margin-bottom: 1.25rem;
+  }
+  .metric-item .label {
+    color: #666;
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .metric-item .value { font-weight: 700; font-size: 1.1rem; }
+
+  /* Info icon + tooltip */
+  .info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    font-style: normal;
+    cursor: help;
+    position: relative;
+    vertical-align: middle;
+    margin-left: 3px;
+    flex-shrink: 0;
+  }
+  .info:hover { background: #94a3b8; }
+  .info .tip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: #f1f5f9;
+    font-size: 12px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    line-height: 1.45;
+    padding: 8px 10px;
+    border-radius: 6px;
+    width: 240px;
+    white-space: normal;
+    z-index: 10;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .info .tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #1e293b;
+  }
+  .info:hover .tip { display: block; }
+
+  .jaccard-bar-container {
+    grid-column: 1 / -1;
+    margin-top: 0.25rem;
+  }
+  .jaccard-bar-container .label {
+    color: #666;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.3rem;
+  }
+  .jaccard-bar {
+    height: 10px;
+    background: #e5e7eb;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .jaccard-bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.4s ease;
+  }
+
+  .histograms {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .histogram-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+  }
+  .histogram-card h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #888;
+    margin: 0 0 0.5rem 0;
+    font-weight: 600;
+  }
+  .hist-empty {
+    color: #aaa;
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 1rem 0;
+    font-style: italic;
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .column {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    line-height: 1.75;
+    font-size: 0.92rem;
+  }
+  .column h2 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #888;
+    margin: 0 0 0.75rem 0;
+  }
+  .match { background: #c8f0c8; border-radius: 2px; padding: 1px 2px; cursor: pointer; transition: outline 0.15s; }
+  .diff  { background: #fbd4d4; border-radius: 2px; padding: 1px 2px; }
+  .match.highlight { outline: 2px solid #1a7a1a; background: #90e090; }
+
+  .legend { font-size: 0.8rem; color: #666; margin-top: 1rem; }
+  .legend span { padding: 2px 8px; border-radius: 3px; margin-right: 0.5rem; }
+
+  .empty-state { text-align: center; color: #999; padding: 2rem; font-size: 0.95rem; }
+</style>
+</head>
+<body>
+
+<h1>Transcript Duplication Checker</h1>
+<p class="subtitle">Paste two transcripts below to identify shared text and compute similarity metrics.</p>
+
+<div class="input-section">
+  <div>
+    <label for="text1">Transcript 1</label>
+    <textarea id="text1" placeholder="Paste the first transcript here..."></textarea>
+  </div>
+  <div>
+    <label for="text2">Transcript 2</label>
+    <textarea id="text2" placeholder="Paste the second transcript here..."></textarea>
+  </div>
+</div>
+
+<div class="btn-row">
+  <button onclick="runComparison()">Compare</button>
+  <button class="btn-clear" onclick="clearAll()">Clear</button>
+</div>
+
+<div id="results">
+  <div class="metrics" id="metrics"></div>
+  <div class="histograms" id="histograms"></div>
+  <div class="columns">
+    <div class="column"><h2>Transcript 1</h2><div id="col1"></div></div>
+    <div class="column"><h2>Transcript 2</h2><div id="col2"></div></div>
+  </div>
+  <div class="legend">
+    <span style="background:#c8f0c8;">matching</span>
+    <span style="background:#fbd4d4;">different</span>
+    &mdash; hover a matching run to highlight its counterpart
+  </div>
+</div>
+
+<script>
+// ── SequenceMatcher (word-level, port of Python's difflib) ──────────────
+
+function sequenceMatcherGetBlocks(a, b) {
+  // Build a map: word -> list of indices in b
+  const b2j = new Map();
+  for (let j = 0; j < b.length; j++) {
+    const w = b[j];
+    if (!b2j.has(w)) b2j.set(w, []);
+    b2j.get(w).push(j);
+  }
+
+  // Find all matching blocks recursively via longest-match divide & conquer
+  const blocks = [];
+
+  function findLongestMatch(alo, ahi, blo, bhi) {
+    let bestI = alo, bestJ = blo, bestSize = 0;
+    // j2len[j] = length of longest match ending with a[i] and b[j]
+    let j2len = new Map();
+    for (let i = alo; i < ahi; i++) {
+      const newJ2len = new Map();
+      const indices = b2j.get(a[i]);
+      if (indices) {
+        for (const j of indices) {
+          if (j < blo) continue;
+          if (j >= bhi) continue;
+          const k = (j2len.get(j - 1) || 0) + 1;
+          newJ2len.set(j, k);
+          if (k > bestSize) {
+            bestI = i - k + 1;
+            bestJ = j - k + 1;
+            bestSize = k;
+          }
+        }
+      }
+      j2len = newJ2len;
+    }
+    return [bestI, bestJ, bestSize];
+  }
+
+  function helper(alo, ahi, blo, bhi) {
+    const [i, j, k] = findLongestMatch(alo, ahi, blo, bhi);
+    if (k > 0) {
+      if (alo < i && blo < j) helper(alo, i, blo, j);
+      blocks.push([i, j, k]);
+      if (i + k < ahi && j + k < bhi) helper(i + k, ahi, j + k, bhi);
+    }
+  }
+
+  helper(0, a.length, 0, b.length);
+
+  // Collapse adjacent equal blocks
+  const collapsed = [];
+  for (const [i, j, k] of blocks) {
+    if (collapsed.length > 0) {
+      const last = collapsed[collapsed.length - 1];
+      if (last[0] + last[2] === i && last[1] + last[2] === j) {
+        last[2] += k;
+        continue;
+      }
+    }
+    collapsed.push([i, j, k]);
+  }
+  // Sentinel
+  collapsed.push([a.length, b.length, 0]);
+  return collapsed;
+}
+
+
+// ── Compare transcripts ─────────────────────────────────────────────────
+
+function compareTranscripts(text1, text2) {
+  const words1 = text1.trim().split(/\s+/).filter(w => w.length > 0);
+  const words2 = text2.trim().split(/\s+/).filter(w => w.length > 0);
+  const n1 = words1.length, n2 = words2.length;
+
+  if (n1 === 0 && n2 === 0) {
+    return { matches: [], diffs: [], commonLength: 0, length1: 0, length2: 0, jaccard: 1, avgDiffProportion: 0, numDiffSegments: 0, words1, words2 };
+  }
+
+  const blocks = sequenceMatcherGetBlocks(words1, words2);
+
+  const matches = [];
+  const diffs = [];
+  let commonLength = 0;
+  let prevEnd1 = 0, prevEnd2 = 0;
+
+  for (const [a, b, size] of blocks) {
+    if (a > prevEnd1 || b > prevEnd2) {
+      diffs.push([prevEnd1, a, prevEnd2, b]);
+    }
+    if (size > 0) {
+      matches.push([a, a + size, b, b + size]);
+      commonLength += size;
+    }
+    prevEnd1 = a + size;
+    prevEnd2 = b + size;
+  }
+
+  const unionLength = n1 + n2 - commonLength;
+  const jaccard = unionLength > 0 ? commonLength / unionLength : 1.0;
+
+  const diffMasses = diffs.map(([s1, e1, s2, e2]) => (e1 - s1) + (e2 - s2));
+  const totalDiffMass = diffMasses.reduce((a, b) => a + b, 0);
+  let avgDiffProportion = 0;
+  if (totalDiffMass > 0) {
+    const proportions = diffMasses.map(m => m / totalDiffMass);
+    avgDiffProportion = proportions.reduce((a, b) => a + b, 0) / proportions.length;
+  }
+
+  return {
+    matches, diffs, commonLength,
+    length1: n1, length2: n2,
+    jaccard, avgDiffProportion,
+    numDiffSegments: diffs.length,
+    words1, words2
+  };
+}
+
+
+// ── Render ───────────────────────────────────────────────────────────────
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function renderSide(words, annotations) {
+  const parts = [];
+  let i = 0;
+  while (i < words.length) {
+    const ann = annotations[i];
+    let j = i;
+    while (j < words.length && annotations[j] && ann &&
+           annotations[j][0] === ann[0] && annotations[j][1] === ann[1]) {
+      j++;
+    }
+    // Handle null annotations
+    if (!ann) {
+      while (j < words.length && !annotations[j]) j++;
+      parts.push(escapeHtml(words.slice(i, j).join(' ')));
+    } else if (ann[0] === 'match') {
+      parts.push(`<span class="match" data-mid="${ann[1]}">${escapeHtml(words.slice(i, j).join(' '))}</span>`);
+    } else {
+      parts.push(`<span class="diff">${escapeHtml(words.slice(i, j).join(' '))}</span>`);
+    }
+    i = j;
+  }
+  return parts.join(' ');
+}
+
+function median(arr) {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function renderDiffPositionHistogram(diffSpans, textLength, { width = 560, height = 160, numBins = 20, color = '#e76f6f', sharedYMax = null } = {}) {
+  // diffSpans: list of [start, end] word indices in this transcript.
+  // For each diff word, bucket it by its normalized position (i / textLength).
+  // Bar height = total number of diff words in that position bucket.
+  if (!diffSpans || diffSpans.length === 0 || textLength === 0) {
+    return '<div class="hist-empty">No diff segments in this transcript</div>';
+  }
+  const bins = new Array(numBins).fill(0);
+  for (const [s, e] of diffSpans) {
+    for (let i = s; i < e; i++) {
+      let b = Math.floor((i / textLength) * numBins);
+      if (b >= numBins) b = numBins - 1;
+      if (b < 0) b = 0;
+      bins[b]++;
+    }
+  }
+  const maxCount = sharedYMax !== null ? sharedYMax : Math.max(...bins, 1);
+
+  const margin = { top: 10, right: 10, bottom: 34, left: 42 };
+  const plotW = width - margin.left - margin.right;
+  const plotH = height - margin.top - margin.bottom;
+
+  const bars = bins.map((c, i) => {
+    const x = margin.left + (i / numBins) * plotW;
+    const w = Math.max(plotW / numBins - 1, 1);
+    const h = (c / maxCount) * plotH;
+    const y = margin.top + plotH - h;
+    return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="${color}" opacity="0.8" />`;
+  }).join('');
+
+  // X ticks at 0%, 25%, 50%, 75%, 100%
+  const xTicks = [0, 0.25, 0.5, 0.75, 1];
+  const xTickMarkup = xTicks.map(t => {
+    const x = margin.left + t * plotW;
+    return `<text x="${x.toFixed(2)}" y="${margin.top + plotH + 14}" text-anchor="middle" fill="#666" font-size="10">${(t * 100).toFixed(0)}%</text>`;
+  }).join('');
+
+  // Y ticks
+  const yTickMarkup = `
+    <text x="${margin.left - 6}" y="${(margin.top + 4).toFixed(2)}" text-anchor="end" fill="#666" font-size="10">${Math.round(maxCount)}</text>
+    <text x="${margin.left - 6}" y="${(margin.top + plotH).toFixed(2)}" text-anchor="end" fill="#666" font-size="10">0</text>
+  `;
+
+  return `
+    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;">
+      ${bars}
+      <line x1="${margin.left}" y1="${margin.top + plotH}" x2="${margin.left + plotW}" y2="${margin.top + plotH}" stroke="#bbb" stroke-width="1" />
+      <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + plotH}" stroke="#bbb" stroke-width="1" />
+      ${xTickMarkup}
+      ${yTickMarkup}
+      <text x="${margin.left + plotW / 2}" y="${height - 4}" text-anchor="middle" fill="#555" font-size="10">position in transcript (start \u2192 end)</text>
+      <text x="12" y="${margin.top + plotH / 2}" text-anchor="middle" fill="#555" font-size="10" transform="rotate(-90 12,${margin.top + plotH / 2})">diff words</text>
+    </svg>
+  `;
+}
+
+function jaccardColor(j) {
+  // Green for high similarity, yellow for mid, red-ish for low
+  if (j >= 0.6) return '#22c55e';
+  if (j >= 0.3) return '#eab308';
+  return '#ef4444';
+}
+
+function runComparison() {
+  const text1 = document.getElementById('text1').value;
+  const text2 = document.getElementById('text2').value;
+  if (!text1.trim() || !text2.trim()) {
+    alert('Please paste text into both fields.');
+    return;
+  }
+
+  const r = compareTranscripts(text1, text2);
+
+  // Compute diff segment lengths and normalized positions
+  const diffLengths = r.diffs.map(([s1, e1, s2, e2]) => (e1 - s1) + (e2 - s2));
+  const diffPositions = r.diffs.map(([s1, e1, s2, e2]) => {
+    // Average the normalized midpoint in each transcript (0 = start, 1 = end)
+    const pos1 = r.length1 > 0 ? ((s1 + e1) / 2) / r.length1 : 0.5;
+    const pos2 = r.length2 > 0 ? ((s2 + e2) / 2) / r.length2 : 0.5;
+    return (pos1 + pos2) / 2;
+  });
+  const medianDiffLen = median(diffLengths);
+  const medianDiffPos = median(diffPositions);
+
+  const posLabel = r.numDiffSegments === 0 ? '\u2014' : (medianDiffPos * 100).toFixed(0) + '%';
+
+  // Metrics
+  const metricsEl = document.getElementById('metrics');
+  metricsEl.innerHTML = `
+    <div class="jaccard-bar-container">
+      <div class="label">Jaccard similarity: <strong>${(r.jaccard * 100).toFixed(1)}%</strong> <span class="info">i<span class="tip">Common words / (transcript 1 words + transcript 2 words \u2212 common words). Ranges from 0% (no overlap) to 100% (identical).</span></span></div>
+      <div class="jaccard-bar"><div class="jaccard-bar-fill" style="width:${(r.jaccard * 100).toFixed(1)}%;background:${jaccardColor(r.jaccard)}"></div></div>
+    </div>
+    <div class="metric-item"><span class="label">Common words <span class="info">i<span class="tip">Total number of words that appear in matching (green) runs between the two transcripts, counted once.</span></span></span><span class="value">${r.commonLength}</span></div>
+    <div class="metric-item"><span class="label">Transcript 1 words <span class="info">i<span class="tip">Total number of whitespace-separated words in transcript 1.</span></span></span><span class="value">${r.length1}</span></div>
+    <div class="metric-item"><span class="label">Transcript 2 words <span class="info">i<span class="tip">Total number of whitespace-separated words in transcript 2.</span></span></span><span class="value">${r.length2}</span></div>
+    <div class="metric-item"><span class="label">Same segments <span class="info">i<span class="tip">Number of contiguous runs of words that match between the two transcripts (the green highlighted spans).</span></span></span><span class="value">${r.matches.length}</span></div>
+    <div class="metric-item"><span class="label">Diff segments <span class="info">i<span class="tip">Number of gaps between matching runs where the transcripts differ (the red highlighted spans). Many small diff segments suggest minor transcription variations; fewer large ones suggest substantive content differences.</span></span></span><span class="value">${r.numDiffSegments}</span></div>
+    <div class="metric-item"><span class="label">Median diff length <span class="info">i<span class="tip">Median number of words per diff segment (summing both sides). Low values suggest small scattered transcription errors; high values suggest large substantive blocks of differing content or segmentation issues.</span></span></span><span class="value">${r.numDiffSegments > 0 ? medianDiffLen.toFixed(1) : '\u2014'} words</span></div>
+    <div class="metric-item"><span class="label">Median diff position <span class="info">i<span class="tip">Median normalized position of diff segments (0% = start, 50% = center, 100% = end), averaged across both transcripts. Values near 50% suggest differences are scattered throughout; values near 0% or 100% suggest a segmentation mismatch at the start or end of one transcript.</span></span></span><span class="value">${posLabel}</span></div>
+  `;
+
+  // One histogram per transcript: x-axis = position in transcript (bucketed),
+  // y-axis = total diff words in that position bucket.
+  const diffs1 = r.diffs.map(([s1, e1]) => [s1, e1]);
+  const diffs2 = r.diffs.map(([, , s2, e2]) => [s2, e2]);
+  // Shared y-axis max so the two charts are directly comparable
+  const NUM_BINS = 20;
+  function bucketSums(spans, n) {
+    const bins = new Array(NUM_BINS).fill(0);
+    if (n === 0) return bins;
+    for (const [s, e] of spans) {
+      for (let i = s; i < e; i++) {
+        let b = Math.floor((i / n) * NUM_BINS);
+        if (b >= NUM_BINS) b = NUM_BINS - 1;
+        if (b < 0) b = 0;
+        bins[b]++;
+      }
+    }
+    return bins;
+  }
+  const sums1 = bucketSums(diffs1, r.length1);
+  const sums2 = bucketSums(diffs2, r.length2);
+  const sharedYMax = Math.max(1, ...sums1, ...sums2);
+
+  const histEl = document.getElementById('histograms');
+  histEl.innerHTML = `
+    <div class="histogram-card">
+      <h3>Transcript 1 &mdash; diff words by position</h3>
+      ${renderDiffPositionHistogram(diffs1, r.length1, { numBins: NUM_BINS, sharedYMax })}
+    </div>
+    <div class="histogram-card">
+      <h3>Transcript 2 &mdash; diff words by position</h3>
+      ${renderDiffPositionHistogram(diffs2, r.length2, { numBins: NUM_BINS, sharedYMax })}
+    </div>
+  `;
+
+  // Build per-word annotations
+  const side1 = new Array(r.words1.length).fill(null);
+  const side2 = new Array(r.words2.length).fill(null);
+
+  for (let mid = 0; mid < r.matches.length; mid++) {
+    const [s1, e1, s2, e2] = r.matches[mid];
+    for (let i = s1; i < e1; i++) side1[i] = ['match', mid];
+    for (let i = s2; i < e2; i++) side2[i] = ['match', mid];
+  }
+  for (const [s1, e1, s2, e2] of r.diffs) {
+    for (let i = s1; i < e1; i++) side1[i] = ['diff', -1];
+    for (let i = s2; i < e2; i++) side2[i] = ['diff', -1];
+  }
+
+  document.getElementById('col1').innerHTML = renderSide(r.words1, side1);
+  document.getElementById('col2').innerHTML = renderSide(r.words2, side2);
+
+  document.getElementById('results').classList.add('visible');
+
+  // Hover linking with auto-scroll to partner
+  document.querySelectorAll('.match').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      const mid = el.dataset.mid;
+      const all = document.querySelectorAll(`.match[data-mid="${mid}"]`);
+      all.forEach(e => e.classList.add('highlight'));
+      // Scroll the partner (the one in the other column) into view if needed
+      all.forEach(e => {
+        if (e !== el) {
+          const col = e.closest('.column');
+          if (col) {
+            const colRect = col.getBoundingClientRect();
+            const elRect = e.getBoundingClientRect();
+            if (elRect.top < colRect.top || elRect.bottom > colRect.bottom) {
+              e.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+        }
+      });
+    });
+    el.addEventListener('mouseleave', () => {
+      document.querySelectorAll('.match.highlight').forEach(e => e.classList.remove('highlight'));
+    });
+  });
+}
+
+function clearAll() {
+  document.getElementById('text1').value = '';
+  document.getElementById('text2').value = '';
+  document.getElementById('results').classList.remove('visible');
+}
+
+// Allow Ctrl/Cmd+Enter to trigger comparison
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runComparison();
+});
+</script>
+
+</body>
+</html>
